@@ -5,20 +5,12 @@ from dotenv import load_dotenv
 from crewai import Agent, Task, Crew, Process
 from crewai_tools import WebsiteSearchTool, ScrapeWebsiteTool, BaseTool, tool 
 
-# Stocks API 
 import yfinance as yf
 import markdown
-# import finnhub
-# from polygon import RESTClient
-# from alpha_vantage.timeseries import TimeSeries
+import pdfkit
 
 load_dotenv()
 os.environ["OPENAI_MODEL_NAME"] = 'gpt-4o-mini'
-
-# finnhub_client = finnhub.Client(api_key="crhn2e9r01qjv9rl6fo0crhn2e9r01qjv9rl6fog") # https://github.com/Finnhub-Stock-API/finnhub-python
-# client = RESTClient(api_key="<API_KEY>") # https://github.com/polygon-io/client-python
-# alpha vantage: C4GAKKFA1JOD3AAS https://www.alphavantage.co/documentation/
-
 
 search_tool = WebsiteSearchTool()
 scrape_tool = ScrapeWebsiteTool()
@@ -115,7 +107,7 @@ research_task = Task(
 financial_analyst = Agent(
     role="Expert Financial Analyst",
     goal="Analyze financial data and market trends to write a comprehensive report of the stock analysis.",
-    backstory=("An experienced financial analyst who delivers detailed insights on stock performance and market factors while providing recommendations to investors based on data."),
+    backstory=("An experienced financial analyst who delivers detailed insights on stock performance and market factors while providing recommendations to investors based on the data."),
     # tools=[search_tool, scrape_tool],  
     verbose=True,
     max_iter=5,
@@ -125,15 +117,15 @@ financial_analyst = Agent(
 
 financial_analysis_task = Task( 
     description=(
-        "Analyze the financial data of {company_stock} using key metrics. "
+        "Analyze the financial data of {company_stock} using metrics."
         "Use recent news and market trends to write the report."
     ),
     expected_output=(
         "A comprehensive report of stock analysis about the company along with recommendations for investors based on current trends."
     ),
     agent=financial_analyst,
-    output_file="stock_report.md",
-    # async_execution=True,
+    output_file="stock_report.txt",
+    async_execution=True,
 )
 
 # Crew
@@ -149,16 +141,17 @@ crew = Crew(
     verbose=True
 )
 crew_output = crew.kickoff(inputs=inputs)
-print("Report: \n", crew_output)
+print("Report: \n", crew_output) 
 
-from IPython.display import Markdown
-Markdown(crew_output)
+# Save stock analysis report 
+with open('stock_report.txt', 'r') as file:
+    markdown_text = file.read()
 
-# with open('stock_report.md', 'r') as f:
-#     markdown_text = f.read()
+html = markdown.markdown(markdown_text)
+print("html: \n", html)
 
-# html = markdown.markdown(markdown_text)
-# print(html)
+with open("stock_report.html", "w") as file:
+    file.write(html)
 
 """
 Features:
