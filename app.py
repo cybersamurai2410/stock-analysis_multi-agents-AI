@@ -9,6 +9,12 @@ import yfinance as yf
 import markdown
 import pdfkit
 
+# import smtplib
+# from email.mime.multipart import MIMEMultipart
+# from email.mime.text import MIMEText
+# from email.mime.base import MIMEBase
+# from email import encoders
+
 load_dotenv()
 os.environ["OPENAI_MODEL_NAME"] = 'gpt-4o-mini'
 
@@ -142,7 +148,7 @@ financial_analysis_task = Task(
         "Analyze the research on {company_stock} and write a comprehensive stock analysis report."
     ),
     expected_output=(
-        "A detailed stock analysis report that includes the stock data, financial insights, recent news and market information "
+        "A detailed report that includes analysis of the stock data, financial insights, recent news and market information "
         "followed by the conclusion."
     ),
     agent=financial_analyst,
@@ -153,17 +159,40 @@ financial_analysis_task = Task(
 
 # Crew inputs 
 inputs = {
-    "company_stock": "ibm" 
+    "company_stock": "ibm"  
 }
+
+# crew = Crew(
+#     agents=[data_collector, news_reader, stock_market_researcher, financial_analyst],
+#     tasks=[data_collection_task, news_reader_task, stock_market_research_task, financial_analysis_task],
+#     process=Process.sequential,  
+#     full_output=True,
+#     verbose=True, 
+#     memory=True, 
+# )
+
+# Manager required for hierarchical process 
+manager = Agent(
+    role="Project Manager",
+    goal="Coordinate the entire stock analysis workflow, ensuring that all agents complete their tasks efficiently and that the final report is comprehensive and accurate.",
+    backstory=(
+        "An expert project manager with a deep understanding of financial analysis and stock market trends. "
+        "You are responsible for managing the flow of tasks, ensuring data collection, research and report writing are done in a coordinated manner."
+        "Do not repeat the task that handles stock data collection and use only the data that is provided."
+    ),
+    allow_delegation=True,  
+)
 
 crew = Crew(
     agents=[data_collector, news_reader, stock_market_researcher, financial_analyst],
     tasks=[data_collection_task, news_reader_task, stock_market_research_task, financial_analysis_task],
-    process=Process.sequential,  
+    process=Process.hierarchical,  
+    manager_agent=manager,
     full_output=True,
     verbose=True, 
     memory=True, 
 )
+
 crew_output = crew.kickoff(inputs=inputs)
 print("Report: \n", crew_output) 
 
@@ -182,13 +211,11 @@ with open("stock_report.html", "w") as file:
 
 """
 Features:
-- manager & hierarchical 
-- compare multiple stocks; add to input dict
-- email stock analysis report 
+- convert report html to pdf then email stock analysis report 
+- compare multiple stocks; add to input dict as separate crew
 - custom tool for executing ml model that predicts timeseries stock price 
 
 Issues:
-- crew stops after iteration limit
 
 Run:
 streamlit run main.py
