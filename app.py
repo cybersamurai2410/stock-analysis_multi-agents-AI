@@ -9,11 +9,12 @@ import yfinance as yf
 import markdown
 import pdfkit
 
-# import smtplib
-# from email.mime.multipart import MIMEMultipart
-# from email.mime.text import MIMEText
-# from email.mime.base import MIMEBase
-# from email import encoders
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from email.mime.base import MIMEBase
+from email.mime.application import MIMEApplication
+from email import encoders
 
 load_dotenv()
 os.environ["OPENAI_MODEL_NAME"] = 'gpt-4o-mini'
@@ -159,7 +160,7 @@ financial_analysis_task = Task(
 
 # Crew inputs 
 inputs = {
-    "company_stock": "ibm"  
+    "company_stock": "amazon"  
 }
 
 # crew = Crew(
@@ -194,26 +195,32 @@ crew = Crew(
 )
 
 crew_output = crew.kickoff(inputs=inputs)
-print("Report: \n", crew_output) 
+print("Report:\n", crew_output) 
 
 # Crew output logs 
-print(f"Raw Output: {crew_output.raw}")
-print(f"Tasks Output: {crew_output.tasks_output}")
-print(f"Token Usage: {crew_output.token_usage}")
+print(f"\nRaw Output:\n {crew_output.raw}")
+print(f"\nTasks Output:\n {crew_output.tasks_output}")
+print(f"\nToken Usage:\n {crew_output.token_usage}")
 
 # Save stock analysis report 
-with open('stock_report.txt', 'r') as file:
+with open("stock_report.txt", "r") as file:
     markdown_text = file.read()
 
 html = markdown.markdown(markdown_text)
 with open("stock_report.html", "w") as file:
     file.write(html)
 
+# Convert HTML to PDF report 
+config = pdfkit.configuration(wkhtmltopdf=r"C:\Program Files\wkhtmltopdf\bin\wkhtmltopdf.exe")
+pdfkit.from_file("stock_report.html", "stock_report.pdf", configuration=config)
+
+# Send report by email 
+
 """
 Features:
-- convert report html to pdf then email stock analysis report 
 - compare multiple stocks; add to input dict as separate crew
 - custom tool for executing ml model that predicts timeseries stock price 
+- store chain of thought; crew logs 
 
 Issues:
 
