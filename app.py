@@ -64,12 +64,7 @@ def fetch_stock_news(ticker: str) -> str:
         news_summary.append(summary)
     
     # Join all summaries into a single string
-    return "Recent news:\n" + "\n\n".join(news_summary)
-
-"""
-- Agents: https://docs.crewai.com/core-concepts/Agents/
-- Tasks: https://docs.crewai.com/core-concepts/Tasks/
-"""
+    return "Recent News:\n" + "\n\n".join(news_summary)
 
 # Data collection 
 data_collector = Agent(
@@ -79,92 +74,121 @@ data_collector = Agent(
     tools=[fetch_stock_data],
     verbose=True,
     max_iter=5,
+    allow_delegation=False, 
 )
 
 data_collection_task = Task(
-    description="Collect key stock data metrics for {company_stock}.",
-    expected_output="A dictionary of the most relevant financial metrics for stock analysis.",
-    agent=data_collector
+    description="Collect key stock data metrics for {company_stock} using its ticker format.",
+    expected_output="Data about most relevant financial metrics for stock analysis.",
+    agent=data_collector,
+    async_execution=False,
 )
 
 # News Researcher 
-researcher = Agent(
-    role="News Research Analyst",
+news_reader = Agent(
+    role="News Reader",
     goal="Find and summarize the latest news articles about the company.",
     backstory=("A diligent researcher who keeps an eye on the latest financial news and trends that impact stock performance."),
     tools=[fetch_stock_news, search_tool, scrape_tool],
     verbose=True,
     max_iter=5,
+    allow_delegation=False, 
 )
 
-research_task = Task(
+news_reader_task = Task(
     description="Find the latest financial news for {company_stock} and summarize the key points from recent articles.",
     expected_output="A summary of the most recent and relevant news articles about {company_stock}.",
-    agent=researcher,
+    agent=news_reader,
+    async_execution=False,
 )
 
-# Financial Analyst (maybe seperate into fanancial research and report writer)
-financial_analyst = Agent(
-    role="Expert Financial Analyst",
-    goal="Analyze financial data and market trends to write a comprehensive report of the stock analysis.",
-    backstory=("An experienced financial analyst who delivers detailed insights on stock performance and market factors while providing recommendations to investors based on the data."),
-    # tools=[search_tool, scrape_tool],  
+# Stock Market Researcher 
+stock_market_researcher = Agent(
+    role="Stock Market Researcher",
+    goal="Research stock performance, market trends and industry movements to provide insights.",
+    backstory=("An experienced stock market researcher who gathers information from sources to offer insights about the performance of the company."),
+    tools=[search_tool, scrape_tool],  
     verbose=True,
     max_iter=5,
-    allow_delegation=True,
-    
+    allow_delegation=False,  
 )
 
-financial_analysis_task = Task( 
+stock_market_research_task = Task( # Separate into multiple tasks for the same agent 
     description=(
-        "Analyze the financial data of {company_stock} using metrics."
-        "Use recent news and market trends to write the report."
+        "Conduct research on {company_stock} focusing on:\n"
+        "- General market trends effecting the company.\n"
+        "- Industry comparisons between competitors and recent events affecting the company.\n"
+        "- Risks and opportunities related to current market conditions.\n"
     ),
     expected_output=(
-        "A comprehensive report of stock analysis about the company along with recommendations for investors based on current trends."
+        "A clear analysis of {company_stock} covering market trends, industry comparisons, risks and opportunities."
+    ),
+    agent=stock_market_researcher,
+    async_execution=False,
+)
+
+# Financial Analyst  
+financial_analyst = Agent(
+    role="Financial Analyst",
+    goal="Analyze financial stock data and use information about the company to write a comprehensive stock analysis report.",
+    backstory=("A skilled financial analyst who analyzes company data and provides detailed stock reports."),
+    verbose=True,
+    max_iter=5,
+    allow_delegation=False,  
+)
+
+financial_analysis_task = Task(
+    description=(
+        "Analyze the research on {company_stock} and write a comprehensive stock analysis report."
+    ),
+    expected_output=(
+        "A detailed stock analysis report that includes the stock data, financial insights, recent news and market information "
+        "followed by the conclusion."
     ),
     agent=financial_analyst,
     output_file="stock_report.txt",
-    async_execution=True,
+    async_execution=False,
+    context=[data_collection_task, news_reader_task, stock_market_research_task],
 )
 
-# Crew
+# Crew inputs 
 inputs = {
-    "company_stock": "ibm" # stock_comparison: list converted to string format  
+    "company_stock": "ibm" 
 }
 
 crew = Crew(
-    agents=[data_collector, researcher, financial_analyst],
-    tasks=[data_collection_task, research_task, financial_analysis_task],
+    agents=[data_collector, news_reader, stock_market_researcher, financial_analyst],
+    tasks=[data_collection_task, news_reader_task, stock_market_research_task, financial_analysis_task],
     process=Process.sequential,  
     full_output=True,
-    verbose=True
+    verbose=True, 
+    memory=True, 
 )
 crew_output = crew.kickoff(inputs=inputs)
 print("Report: \n", crew_output) 
+
+# Crew output logs 
+print(f"Raw Output: {crew_output.raw}")
+print(f"Tasks Output: {crew_output.tasks_output}")
+print(f"Token Usage: {crew_output.token_usage}")
 
 # Save stock analysis report 
 with open('stock_report.txt', 'r') as file:
     markdown_text = file.read()
 
 html = markdown.markdown(markdown_text)
-print("html: \n", html)
-
 with open("stock_report.html", "w") as file:
     file.write(html)
 
 """
 Features:
-- manager
-- hierarchical 
-- custom tool stock api; return selected keys from dictionary 
-- multiple custom tools runnning async for different financial data retreival and custom calculations
+- manager & hierarchical 
 - compare multiple stocks; add to input dict
-- custom function for executing ml model that predicts stock price 
+- email stock analysis report 
+- custom tool for executing ml model that predicts timeseries stock price 
 
 Issues:
-- Input company name instead of tickers.
-- Input multiple company names for comparison.
+- crew stops after iteration limit
 
 Run:
 streamlit run main.py
