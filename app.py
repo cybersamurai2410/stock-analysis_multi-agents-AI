@@ -214,16 +214,53 @@ with open("stock_report.html", "w") as file:
 config = pdfkit.configuration(wkhtmltopdf=r"C:\Program Files\wkhtmltopdf\bin\wkhtmltopdf.exe")
 pdfkit.from_file("stock_report.html", "stock_report.pdf", configuration=config)
 
-# Send report by email 
+### Send report by email ###
+sender_email = os.getenv('SENDER_EMAIL')  
+receiver_email = os.getenv('RECEIVER_EMAIL')  
+password = os.getenv('EMAIL_PASSWORD')  
+
+subject = "Stock Analysis Report"  
+body = "Please find the attached stock analysis report."  
+file_name = "stock_report.pdf"
+
+def send_report(sender_email, receiver_email, password, subject, body, file_name):
+    # Create a multipart message container. This will contain both text and attachments.
+    message = MIMEMultipart()
+    message['From'] = sender_email  
+    message['To'] = receiver_email  
+    message['Subject'] = subject  
+
+    # Attach the text body of the email. 'plain' indicates it is plain text.
+    message.attach(MIMEText(body, 'plain'))
+
+    # Open the HTML report file in binary mode to attach it to the email.
+    with open(file_name, "rb") as attachment:
+        part = MIMEBase("application", "octet-stream")  # Create a MIMEBase instance, which can represent any attachment type.
+        part.set_payload(attachment.read())  # Read the attachment file content into the MIMEBase instance.
+        encoders.encode_base64(part)  # Encode the file content in base64 to ensure safe email transport.
+        
+        # Add a header to indicate the file name that will appear in the email; this is for the attachment
+        part.add_header(
+            "Content-Disposition",
+            f"attachment; filename={file_name}",
+        )
+        message.attach(part)  # Attach the MIMEBase instance (the file) to the message
+
+    # Send the email
+    try:
+        server = smtplib.SMTP_SSL('smtp.gmail.com', 465)  # Connect securely to Gmail's SMTP server on the SSL port
+        server.login(sender_email, password)  # Log in to the server using the sender's credentials
+        server.sendmail(sender_email, receiver_email, message.as_string())  # Convert the message to a string and send the email
+        server.quit()  # Quit the server connection
+        print("Email sent successfully!")  
+    except Exception as e:
+        print(f"Error: {e}")  
+
+send_report(sender_email, receiver_email, password, subject, body, file_name)
 
 """
 Features:
 - compare multiple stocks; add to input dict as separate crew
 - custom tool for executing ml model that predicts timeseries stock price 
 - store chain of thought; crew logs 
-
-Issues:
-
-Run:
-streamlit run main.py
 """
