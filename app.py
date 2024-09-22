@@ -1,266 +1,86 @@
+import streamlit as st
 import os
-import requests 
 from dotenv import load_dotenv
-
-from crewai import Agent, Task, Crew, Process
-from crewai_tools import WebsiteSearchTool, ScrapeWebsiteTool, BaseTool, tool 
-
-import yfinance as yf
+import agentops
 import markdown
 import pdfkit
 
-import smtplib
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
-from email.mime.base import MIMEBase
-from email.mime.application import MIMEApplication
-from email import encoders
+from agents_tasks import crew
+from custom_tools import send_report
 
 load_dotenv()
 os.environ["OPENAI_MODEL_NAME"] = 'gpt-4o-mini'
+agentops.init()
 
-search_tool = WebsiteSearchTool()
-scrape_tool = ScrapeWebsiteTool()
+st.title("Stock Analysis Report Generator")
 
-@tool("Stock_Data")
-def fetch_stock_data(ticker: str) -> str:
-    """Fetch stock data and historical market data."""
-    stock = yf.Ticker(ticker)
+# Ensure session state tracks whether the report has been generated and store the output logs
+if 'report_generated' not in st.session_state:
     
-    # Fetch current stock information and history of prices
-    stock_info = stock.info
-    hist = stock.history(period="1mo")  
+    st.session_state['report_generated'] = False
 
-    output = (
-        f"Stock Data for {ticker}:\n"
-        f"P/E Ratio: {stock_info.get('forwardPE', 'N/A')}\n"
-        f"EPS: {stock_info.get('trailingEps', 'N/A')}\n"
-        f"Revenue: {stock_info.get('totalRevenue', 'N/A')}\n"
-        f"Debt to Equity: {stock_info.get('debtToEquity', 'N/A')}\n"
-        f"Market Cap: {stock_info.get('marketCap', 'N/A')}\n"
-        f"Dividend Yield: {stock_info.get('dividendYield', 'N/A')}\n"
-        f"Open Price: {stock_info.get('open', 'N/A')}\n"
-        f"Close Price: {stock_info.get('previousClose', 'N/A')}\n"
-        f"Day High: {stock_info.get('dayHigh', 'N/A')}\n"
-        f"Day Low: {stock_info.get('dayLow', 'N/A')}\n"
-        f"Volume: {stock_info.get('volume', 'N/A')}\n\n"
-    )
+if 'crew_output' not in st.session_state:
+    st.session_state['crew_output'] = None
 
-    output += "Historical Stock Prices (Past Month):\n"
-    for date, row in hist.iterrows():
-        output += (
-            f"Date: {date.date()}, Open: {row['Open']}, High: {row['High']}, "
-            f"Low: {row['Low']}, Close: {row['Close']}, Volume: {row['Volume']}\n"
-        )
+# Input field to enter the company name
+company_name = st.text_input("Enter Company Name or Stock Ticker", "")
 
-    return output
+# Button to generate the stock analysis report
+if st.button("Generate Report"):
+    if company_name != "":
+        with st.spinner("Generating stock analysis report..."):
+            crew_output = crew.kickoff(inputs={"company_stock": company_name})
+            st.session_state['crew_output'] = crew_output
+            # print("Report:\n", crew_output) # crew_output.raw
 
-@tool("Stock_News")
-def fetch_stock_news(ticker: str) -> str:
-    """Fetch recent news articles related to the company stock of a given ticker."""
-    stock = yf.Ticker(ticker)
-    news_items = stock.news
-    
-    # Format the news into a readable summary
-    news_summary = []
-    for item in news_items[:5]:  # Limit to the top 5 news articles
-        title = item.get('title', 'No title available')
-        publisher = item.get('publisher', 'Unknown publisher')
-        link = item.get('link', 'No link available')
-        summary = f"{title} - Published by {publisher}. Read more: {link}"
-        news_summary.append(summary)
-    
-    # Join all summaries into a single string
-    return "Recent News:\n" + "\n\n".join(news_summary)
+            # Crew output logs 
+            print(f"\nRaw Output:\n {crew_output.raw}")
+            print(f"\nTasks Output:\n {crew_output.tasks_output}")
+            print(f"\nToken Usage:\n {crew_output.token_usage}")
+            # print(f"\nUsage Metrics:\n {crew.usage_metrics}") # crew_output.token_usage
 
-# Data collection 
-data_collector = Agent(
-    role="Stock Data Collector",
-    goal="Efficiently gather stock market data for financial analysis.",
-    backstory=("A reliable financial data collector who has access to stock data APIs and tools."),
-    tools=[fetch_stock_data],
-    verbose=True,
-    max_iter=5,
-    allow_delegation=False, 
-)
+        st.success(f"Report for {company_name} generated successfully!")
+        st.session_state['report_generated'] = True  # Set state to indicate report has been generated
+    else:
+        st.error("Please enter a valid company name or stock ticker.")
+        st.session_state['report_generated'] = False  
 
-data_collection_task = Task(
-    description="Collect key stock data metrics for {company_stock} using its ticker format.",
-    expected_output="Data about most relevant financial metrics for stock analysis.",
-    agent=data_collector,
-    async_execution=False,
-)
+# Check if the report has been generated 
+if st.session_state['report_generated']:
+    # st.markdown(example_report)
 
-# News Researcher 
-news_reader = Agent(
-    role="News Reader",
-    goal="Find and summarize the latest news articles about the company.",
-    backstory=("A diligent researcher who keeps an eye on the latest financial news and trends that impact stock performance."),
-    tools=[fetch_stock_news, search_tool, scrape_tool],
-    verbose=True,
-    max_iter=5,
-    allow_delegation=False, 
-)
+    # Display generated report 
+    crew_output = st.session_state['crew_output']
+    if crew_output:
+        st.markdown(crew_output.raw)
 
-news_reader_task = Task(
-    description="Find the latest financial news for {company_stock} and summarize the key points from recent articles.",
-    expected_output="A summary of the most recent and relevant news articles about {company_stock}.",
-    agent=news_reader,
-    async_execution=False,
-)
+    # Save stock analysis report 
+    with open("stock_report.txt", "r") as file:
+        markdown_text = file.read()
 
-# Stock Market Researcher 
-stock_market_researcher = Agent(
-    role="Stock Market Researcher",
-    goal="Research stock performance, market trends and industry movements to provide insights.",
-    backstory=("An experienced stock market researcher who gathers information from sources to offer insights about the performance of the company."),
-    tools=[search_tool, scrape_tool],  
-    verbose=True,
-    max_iter=5,
-    allow_delegation=False,  
-)
+    html = markdown.markdown(markdown_text)
+    with open("stock_report.html", "w") as file:
+        file.write(html)
 
-stock_market_research_task = Task( # Separate into multiple tasks for the same agent 
-    description=(
-        "Conduct research on {company_stock} focusing on:\n"
-        "- General market trends effecting the company.\n"
-        "- Industry comparisons between competitors and recent events affecting the company.\n"
-        "- Risks and opportunities related to current market conditions.\n"
-    ),
-    expected_output=(
-        "A clear analysis of {company_stock} covering market trends, industry comparisons, risks and opportunities."
-    ),
-    agent=stock_market_researcher,
-    async_execution=False,
-)
+    # Convert HTML to PDF report 
+    config = pdfkit.configuration(wkhtmltopdf=r"C:\Program Files\wkhtmltopdf\bin\wkhtmltopdf.exe")
+    pdfkit.from_file("stock_report.html", "stock_report.pdf", configuration=config)
 
-# Financial Analyst  
-financial_analyst = Agent(
-    role="Financial Analyst",
-    goal="Analyze financial stock data and use information about the company to write a comprehensive stock analysis report.",
-    backstory=("A skilled financial analyst who analyzes company data and provides detailed stock reports."),
-    verbose=True,
-    max_iter=5,
-    allow_delegation=False,  
-)
+    # Display chain of thought reasoning and API call metrics 
+    with st.expander("Show Chain of Thought"):
+        # st.markdown(chain_of_thought)
+        st.markdown(crew_output.tasks_output)
+        st.markdown(crew_output.token_usage) 
 
-financial_analysis_task = Task(
-    description=(
-        "Analyze the research on {company_stock} and write a comprehensive stock analysis report."
-    ),
-    expected_output=(
-        "A detailed report that includes analysis of the stock data, financial insights, recent news and market information "
-        "followed by the conclusion."
-    ),
-    agent=financial_analyst,
-    output_file="stock_report.txt",
-    async_execution=False,
-    context=[data_collection_task, news_reader_task, stock_market_research_task],
-)
+    # Send report by email
+    email_address = st.text_input("Enter your email", "")
+    if st.button("Send Email"):
+        sender_email = os.getenv('SENDER_EMAIL')  
+        receiver_email = email_address
+        password = os.getenv('EMAIL_PASSWORD') 
+        subject = f"Stock Analysis Report: {company_name}"  
+        body = "Please find the attached stock analysis report." 
+        file_name="stock_report.pdf"
 
-# Crew inputs 
-inputs = {
-    "company_stock": "amazon"  
-}
-
-# crew = Crew(
-#     agents=[data_collector, news_reader, stock_market_researcher, financial_analyst],
-#     tasks=[data_collection_task, news_reader_task, stock_market_research_task, financial_analysis_task],
-#     process=Process.sequential,  
-#     full_output=True,
-#     verbose=True, 
-#     memory=True, 
-# )
-
-# Manager required for hierarchical process 
-manager = Agent(
-    role="Project Manager",
-    goal="Coordinate the entire stock analysis workflow, ensuring that all agents complete their tasks efficiently and that the final report is comprehensive and accurate.",
-    backstory=(
-        "An expert project manager with a deep understanding of financial analysis and stock market trends. "
-        "You are responsible for managing the flow of tasks, ensuring data collection, research and report writing are done in a coordinated manner."
-        "Do not repeat the task that handles stock data collection and use only the data that is provided."
-    ),
-    allow_delegation=True,  
-)
-
-crew = Crew(
-    agents=[data_collector, news_reader, stock_market_researcher, financial_analyst],
-    tasks=[data_collection_task, news_reader_task, stock_market_research_task, financial_analysis_task],
-    process=Process.hierarchical,  
-    manager_agent=manager,
-    full_output=True,
-    verbose=True, 
-    memory=True, 
-)
-
-crew_output = crew.kickoff(inputs=inputs)
-print("Report:\n", crew_output) 
-
-# Crew output logs 
-print(f"\nRaw Output:\n {crew_output.raw}")
-print(f"\nTasks Output:\n {crew_output.tasks_output}")
-print(f"\nToken Usage:\n {crew_output.token_usage}")
-
-# Save stock analysis report 
-with open("stock_report.txt", "r") as file:
-    markdown_text = file.read()
-
-html = markdown.markdown(markdown_text)
-with open("stock_report.html", "w") as file:
-    file.write(html)
-
-# Convert HTML to PDF report 
-config = pdfkit.configuration(wkhtmltopdf=r"C:\Program Files\wkhtmltopdf\bin\wkhtmltopdf.exe")
-pdfkit.from_file("stock_report.html", "stock_report.pdf", configuration=config)
-
-### Send report by email ###
-sender_email = os.getenv('SENDER_EMAIL')  
-receiver_email = os.getenv('RECEIVER_EMAIL')  
-password = os.getenv('EMAIL_PASSWORD')  
-
-subject = "Stock Analysis Report"  
-body = "Please find the attached stock analysis report."  
-file_name = "stock_report.pdf"
-
-def send_report(sender_email, receiver_email, password, subject, body, file_name):
-    # Create a multipart message container. This will contain both text and attachments.
-    message = MIMEMultipart()
-    message['From'] = sender_email  
-    message['To'] = receiver_email  
-    message['Subject'] = subject  
-
-    # Attach the text body of the email. 'plain' indicates it is plain text.
-    message.attach(MIMEText(body, 'plain'))
-
-    # Open the HTML report file in binary mode to attach it to the email.
-    with open(file_name, "rb") as attachment:
-        part = MIMEBase("application", "octet-stream")  # Create a MIMEBase instance, which can represent any attachment type.
-        part.set_payload(attachment.read())  # Read the attachment file content into the MIMEBase instance.
-        encoders.encode_base64(part)  # Encode the file content in base64 to ensure safe email transport.
-        
-        # Add a header to indicate the file name that will appear in the email; this is for the attachment
-        part.add_header(
-            "Content-Disposition",
-            f"attachment; filename={file_name}",
-        )
-        message.attach(part)  # Attach the MIMEBase instance (the file) to the message
-
-    # Send the email
-    try:
-        server = smtplib.SMTP_SSL('smtp.gmail.com', 465)  # Connect securely to Gmail's SMTP server on the SSL port
-        server.login(sender_email, password)  # Log in to the server using the sender's credentials
-        server.sendmail(sender_email, receiver_email, message.as_string())  # Convert the message to a string and send the email
-        server.quit()  # Quit the server connection
-        print("Email sent successfully!")  
-    except Exception as e:
-        print(f"Error: {e}")  
-
-send_report(sender_email, receiver_email, password, subject, body, file_name)
-
-"""
-Features:
-- compare multiple stocks; add to input dict as separate crew
-- custom tool for executing ml model that predicts timeseries stock price 
-- store chain of thought; crew logs 
-"""
+        send_report(sender_email, receiver_email, password, subject, body, file_name)
+        st.success(f"Email sent successfully to {email_address}!")
