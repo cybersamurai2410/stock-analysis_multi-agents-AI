@@ -1,14 +1,5 @@
-import os
-import requests 
-from dotenv import load_dotenv
-
-from crewai import Agent, Task, Crew, Process
-from crewai_tools import WebsiteSearchTool, ScrapeWebsiteTool, BaseTool, tool 
-
+from crewai_tools import BaseTool, tool 
 import yfinance as yf
-import markdown
-import pdfkit
-
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
