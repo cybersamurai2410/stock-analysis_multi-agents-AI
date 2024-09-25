@@ -1,22 +1,25 @@
 import streamlit as st
 import os
-from dotenv import load_dotenv
-import agentops
+# from dotenv import load_dotenv
+# import agentops
 import markdown
 import pdfkit
+
+from config import initialize_app # Load environment variables and initialize AgentOps
+initialize_app()
 
 from agents_tasks import crew
 from custom_tools import send_report
 
-load_dotenv()
-os.environ["OPENAI_MODEL_NAME"] = 'gpt-4o-mini'
-agentops.init()
+# load_dotenv()
+# agentops.init()
+# os.environ["OPENAI_MODEL_NAME"] = 'gpt-3.5-turbo' 
+# print(f"Model being used: {os.getenv('OPENAI_MODEL_NAME')}")
 
 st.title("Stock Analysis Report Generator")
 
 # Ensure session state tracks whether the report has been generated and store the output logs
 if 'report_generated' not in st.session_state:
-    
     st.session_state['report_generated'] = False
 
 if 'crew_output' not in st.session_state:
