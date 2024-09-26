@@ -2,7 +2,7 @@
 
 [Click to watch the Application Demo](https://drive.google.com/file/d/15O_BUONNgnGq0lsCz9U6X0y-nrmWZKyy/view?usp=sharing)
 <br></br>
-[AgentOps Evaluation Demo](https://drive.google.com/file/d/15O_BUONNgnGq0lsCz9U6X0y-nrmWZKyy/view?usp=sharing)
+[AgentOps Evaluation Demo](https://drive.google.com/file/d/1ea3Ka1WERS6YR_ZsEhxuCYXJdrMn1beY/view?usp=sharing)
 
 ## Overview
 The Stock Analysis Report Generator allows users to generate comprehensive stock analysis reports based on company names or stock tickers. The application uses multi-agent AI with OpenAI GPT models using the [CrewAI framework](https://github.com/crewAIInc/crewAI) to collect stock data, news, research/web scraping and perform financial analysis. The Crew operates as hierarchical process with a manager agent coordinating the tasks of the other agaents. The agentic wokrflow has been evaluated using the AgentOps platform to trace the LLM output.
