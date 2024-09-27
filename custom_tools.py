@@ -40,6 +40,28 @@ def fetch_stock_data(ticker: str) -> str:
 
     return output
 
+@tool("Stock_Financials")
+def fetch_stock_financials(ticker: str) -> str:
+    """Fetch financial statements for the stock."""
+    stock = yf.Ticker(ticker)
+    
+    income_stmt = stock.income_stmt
+    balance_sheet = stock.balance_sheet
+    cash_flow = stock.cashflow
+
+    output = f"Financial Statements for {ticker}:\n\n"
+    
+    output += "Income Statement (Annual):\n"
+    output += income_stmt.to_string() + "\n\n"
+    
+    output += "Balance Sheet (Annual):\n"
+    output += balance_sheet.to_string() + "\n\n"
+    
+    output += "Cash Flow Statement (Annual):\n"
+    output += cash_flow.to_string() + "\n"
+
+    return output
+
 @tool("Stock_News")
 def fetch_stock_news(ticker: str) -> str:
     """Fetch recent news articles related to the company stock of a given ticker."""
