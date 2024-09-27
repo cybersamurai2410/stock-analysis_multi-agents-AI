@@ -1,7 +1,7 @@
 from crewai import Agent, Task, Crew, Process
 from crewai.tasks import TaskOutput 
 from crewai_tools import WebsiteSearchTool, ScrapeWebsiteTool
-from custom_tools import fetch_stock_data, fetch_stock_news
+from custom_tools import fetch_stock_data, fetch_stock_financials, fetch_stock_news
 
 search_tool = WebsiteSearchTool()
 scrape_tool = ScrapeWebsiteTool()
@@ -18,7 +18,7 @@ data_collector = Agent(
     role="Stock Data Collector",
     goal="Efficiently gather stock market data for financial analysis.",
     backstory=("A reliable financial data collector who has access to stock data APIs and tools."),
-    tools=[fetch_stock_data],
+    tools=[fetch_stock_data, fetch_stock_financials],
     verbose=True,
     max_iter=5,
     allow_delegation=False, 
@@ -124,7 +124,7 @@ crew = Crew(
     full_output=True,
     verbose=True, 
     memory=True, 
-    # planning=True,
+    planning=True,
     # step_callback=crew_step_callback,
     # task_callback=crew_task_callback,
 )
